@@ -273,93 +273,61 @@ const TRI_TABLE = new Int8Array([
   9, 4, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 ]);
 
-function lerp3(a: number, b: number, t: number): number {
-  return a + t * (b - a);
-}
-
-function vertexInterp(
-  p1: THREE.Vector3,
-  p2: THREE.Vector3,
-  v1: number,
-  v2: number,
-  threshold: number
-): THREE.Vector3 {
-  const t = (threshold - v1) / (v2 - v1);
-  return new THREE.Vector3(
-    lerp3(p1.x, p2.x, t),
-    lerp3(p1.y, p2.y, t),
-    lerp3(p1.z, p2.z, t)
-  );
-}
-
-interface Cube {
-  positions: THREE.Vector3[];
-  values: number[];
-}
-
-function processCube(
-  cube: Cube,
+function processCubeFast(
+  cornerValues: number[],
+  cornerX: number[],
+  cornerY: number[],
+  cornerZ: number[],
   threshold: number,
-  mc: MarchingCube
+  mc: MarchingCube,
+  offsetX: number,
+  offsetY: number,
+  offsetZ: number
 ): void {
   let cubeIndex = 0;
   for (let i = 0; i < 8; i++) {
-    if (cube.values[i] < threshold) cubeIndex |= 1 << i;
+    if (cornerValues[i] < threshold) cubeIndex |= 1 << i;
   }
 
   const edgeFlags = EDGE_TABLE[cubeIndex];
   if (edgeFlags === 0) return;
 
-  const edgeVerts: (THREE.Vector3 | null)[] = new Array(12).fill(null);
+  const ex = [0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3];
+  const ey = [1, 2, 3, 0, 5, 6, 7, 4, 4, 5, 6, 7];
+  const evx: number[] = new Array(12);
+  const evy: number[] = new Array(12);
+  const evz: number[] = new Array(12);
+  const evValid: boolean[] = new Array(12).fill(false);
 
-  if (edgeFlags & 1)
-    edgeVerts[0] = vertexInterp(cube.positions[0], cube.positions[1], cube.values[0], cube.values[1], threshold);
-  if (edgeFlags & 2)
-    edgeVerts[1] = vertexInterp(cube.positions[1], cube.positions[2], cube.values[1], cube.values[2], threshold);
-  if (edgeFlags & 4)
-    edgeVerts[2] = vertexInterp(cube.positions[2], cube.positions[3], cube.values[2], cube.values[3], threshold);
-  if (edgeFlags & 8)
-    edgeVerts[3] = vertexInterp(cube.positions[3], cube.positions[0], cube.values[3], cube.values[0], threshold);
-  if (edgeFlags & 16)
-    edgeVerts[4] = vertexInterp(cube.positions[4], cube.positions[5], cube.values[4], cube.values[5], threshold);
-  if (edgeFlags & 32)
-    edgeVerts[5] = vertexInterp(cube.positions[5], cube.positions[6], cube.values[5], cube.values[6], threshold);
-  if (edgeFlags & 64)
-    edgeVerts[6] = vertexInterp(cube.positions[6], cube.positions[7], cube.values[6], cube.values[7], threshold);
-  if (edgeFlags & 128)
-    edgeVerts[7] = vertexInterp(cube.positions[7], cube.positions[4], cube.values[7], cube.values[4], threshold);
-  if (edgeFlags & 256)
-    edgeVerts[8] = vertexInterp(cube.positions[0], cube.positions[4], cube.values[0], cube.values[4], threshold);
-  if (edgeFlags & 512)
-    edgeVerts[9] = vertexInterp(cube.positions[1], cube.positions[5], cube.values[1], cube.values[5], threshold);
-  if (edgeFlags & 1024)
-    edgeVerts[10] = vertexInterp(cube.positions[2], cube.positions[6], cube.values[2], cube.values[6], threshold);
-  if (edgeFlags & 2048)
-    edgeVerts[11] = vertexInterp(cube.positions[3], cube.positions[7], cube.values[3], cube.values[7], threshold);
+  for (let ei = 0; ei < 12; ei++) {
+    if (!(edgeFlags & (1 << ei))) continue;
+    const i = ex[ei];
+    const j = ey[ei];
+    const vi = cornerValues[i];
+    const vj = cornerValues[j];
+    let t = 0.5;
+    if (Math.abs(vj - vi) > 1e-8) {
+      t = (threshold - vi) / (vj - vi);
+    }
+    evx[ei] = (cornerX[i] + t * (cornerX[j] - cornerX[i])) + offsetX;
+    evy[ei] = (cornerY[i] + t * (cornerY[j] - cornerY[i])) + offsetY;
+    evz[ei] = (cornerZ[i] + t * (cornerZ[j] - cornerZ[i])) + offsetZ;
+    evValid[ei] = true;
+  }
 
   let triIndex = 0;
   const startIdx = cubeIndex * 16;
-  const maxIters = 16;
-  let iterCount = 0;
-  while (TRI_TABLE[startIdx + triIndex] !== -1 && iterCount < maxIters) {
-    iterCount++;
+  for (let iter = 0; iter < 16; iter++) {
     const idx0 = TRI_TABLE[startIdx + triIndex];
+    if (idx0 === -1 || idx0 === undefined) break;
     const idx1 = TRI_TABLE[startIdx + triIndex + 1];
     const idx2 = TRI_TABLE[startIdx + triIndex + 2];
 
     if (
-      idx0 === undefined || idx1 === undefined || idx2 === undefined ||
       typeof idx0 !== 'number' || typeof idx1 !== 'number' || typeof idx2 !== 'number' ||
-      idx0 < 0 || idx0 >= 12 || idx1 < 0 || idx1 >= 12 || idx2 < 0 || idx2 >= 12
+      idx0 < 0 || idx0 >= 12 || idx1 < 0 || idx1 >= 12 || idx2 < 0 || idx2 >= 12 ||
+      !evValid[idx0] || !evValid[idx1] || !evValid[idx2]
     ) {
-      break;
-    }
-
-    const v0 = edgeVerts[idx0];
-    const v1 = edgeVerts[idx1];
-    const v2 = edgeVerts[idx2];
-
-    if (!v0 || !v1 || !v2) {
       triIndex += 3;
       continue;
     }
@@ -368,18 +336,25 @@ function processCube(
     const vIdx1 = mc.vertexCount++;
     const vIdx2 = mc.vertexCount++;
 
-    mc.vertices.push(v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z);
+    const ax = evx[idx0], ay = evy[idx0], az = evz[idx0];
+    const bx = evx[idx1], by = evy[idx1], bz = evz[idx1];
+    const cx = evx[idx2], cy = evy[idx2], cz = evz[idx2];
 
-    const edge1 = new THREE.Vector3().subVectors(v1, v0);
-    const edge2 = new THREE.Vector3().subVectors(v2, v0);
-    const normal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+    mc.vertices.push(ax, ay, az, bx, by, bz, cx, cy, cz);
 
-    mc.normals.push(normal.x, normal.y, normal.z);
-    mc.normals.push(normal.x, normal.y, normal.z);
-    mc.normals.push(normal.x, normal.y, normal.z);
+    const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
+    const e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
+    let nx = e1y * e2z - e1z * e2y;
+    let ny = e1z * e2x - e1x * e2z;
+    let nz = e1x * e2y - e1y * e2x;
+    const nlen = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+    nx /= nlen; ny /= nlen; nz /= nlen;
+
+    for (let k = 0; k < 3; k++) {
+      mc.normals.push(nx, ny, nz);
+    }
 
     mc.uvs.push(0, 0, 1, 0, 0.5, 1);
-
     mc.indices.push(vIdx0, vIdx1, vIdx2);
 
     triIndex += 3;
@@ -440,33 +415,63 @@ export function useCaveGenerator() {
         [0, 1, 0], [1, 1, 0], [1, 1, 1], [0, 1, 1],
       ];
 
+      const totalCubes = (size.x - 1) * (size.y - 1) * (size.z - 1);
+      let cubesProcessed = 0;
+      let cubeCounter = 0;
+      const cornerX = new Array(8);
+      const cornerY = new Array(8);
+      const cornerZ = new Array(8);
+      const cornerValues = new Array(8);
+
       for (let y = 0; y < size.y - 1; y++) {
         for (let x = 0; x < size.x - 1; x++) {
           for (let z = 0; z < size.z - 1; z++) {
-            const positions: THREE.Vector3[] = [];
-            const values: number[] = [];
-
-            for (const [ox, oy, oz] of cornerOffsets) {
+            for (let ci = 0; ci < 8; ci++) {
+              const [ox, oy, oz] = cornerOffsets[ci];
               const px = x + ox;
               const py = y + oy;
               const pz = z + oz;
-              positions.push(new THREE.Vector3(px, py, pz));
-              values.push(volume[py * size.x * size.z + px * size.z + pz]);
+              cornerX[ci] = px;
+              cornerY[ci] = py;
+              cornerZ[ci] = pz;
+              cornerValues[ci] = volume[py * size.x * size.z + px * size.z + pz];
             }
 
-            processCube({ positions, values }, threshold, mc);
+            processCubeFast(cornerValues, cornerX, cornerY, cornerZ, threshold, mc, 0, 0, 0);
+
+            cubesProcessed++;
+            cubeCounter++;
+            if (cubeCounter >= 500) {
+              cubeCounter = 0;
+              const progress = 50 + (cubesProcessed / totalCubes) * 50;
+              setProgress(Math.min(99, progress));
+              await new Promise((resolve) => setTimeout(resolve, 0));
+            }
           }
         }
-        setProgress(50 + ((y + 1) / (size.y - 1)) * 50);
+        const progress = 50 + (cubesProcessed / totalCubes) * 50;
+        setProgress(Math.min(99, progress));
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
+      setProgress(99.1);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
       const geometry = new THREE.BufferGeometry();
+      setProgress(99.2);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(mc.vertices, 3));
       geometry.setAttribute('normal', new THREE.Float32BufferAttribute(mc.normals, 3));
       geometry.setAttribute('uv', new THREE.Float32BufferAttribute(mc.uvs, 2));
       geometry.setIndex(mc.indices);
+      setProgress(99.4);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
       geometry.computeVertexNormals();
+      setProgress(99.7);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
       geometry.computeBoundingBox();
       geometry.center();
 
@@ -585,8 +590,12 @@ export function useCaveGenerator() {
       const halfX = size.x / 2;
       const halfY = size.y / 2;
       const halfZ = size.z / 2;
+      const minDist = Math.max(5, size.x / 6);
+      const maxIter = count * 300;
+      let iter = 0;
 
-      while (vents.length < count) {
+      while (vents.length < count && iter < maxIter) {
+        iter++;
         const x = Math.floor(Math.random() * (size.x - 4)) + 2;
         const z = Math.floor(Math.random() * (size.z - 4)) + 2;
 
@@ -599,7 +608,7 @@ export function useCaveGenerator() {
               (v) =>
                 Math.sqrt(
                   Math.pow(v.position.x - (x - halfX), 2) + Math.pow(v.position.z - (z - halfZ), 2)
-                ) < 15
+                ) < minDist
             );
 
             if (!tooClose) {
@@ -629,8 +638,11 @@ export function useCaveGenerator() {
       const halfX = size.x / 2;
       const halfY = size.y / 2;
       const halfZ = size.z / 2;
+      const maxIter = count * 300;
+      let iter = 0;
 
-      while (glowSticks.length < count) {
+      while (glowSticks.length < count && iter < maxIter) {
+        iter++;
         const x = Math.floor(Math.random() * (size.x - 4)) + 2;
         const z = Math.floor(Math.random() * (size.z - 4)) + 2;
 

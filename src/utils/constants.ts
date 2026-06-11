@@ -1,8 +1,8 @@
 import { CaveConfig } from '../types';
 
 export const CAVE_CONFIG: CaveConfig = {
-  size: { x: 48, y: 24, z: 48 },
-  noiseScale: 0.08,
+  size: { x: 32, y: 18, z: 32 },
+  noiseScale: 0.1,
   threshold: 0.35,
   octaves: 4,
   persistence: 0.5,

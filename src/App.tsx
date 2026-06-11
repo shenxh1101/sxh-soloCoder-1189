@@ -20,6 +20,7 @@ import { HUD } from './components/ui/HUD';
 import { DecorationData, GlowStickData, VentData } from './types';
 
 const PICKUP_DISTANCE = 2.0;
+const SAFETY_VENT_RADIUS = 10;
 
 function findNearestGlowStick(
   glowSticks: GlowStickData[],
@@ -36,6 +37,18 @@ function findNearestGlowStick(
     }
   }
   return { id: nearest, distance: minDist };
+}
+
+function ensureVentNearSpawn(vents: VentData[], spawn: THREE.Vector3): VentData[] {
+  const hasNearby = vents.some((v) => v.position.distanceTo(spawn) < SAFETY_VENT_RADIUS);
+  if (hasNearby) return vents;
+
+  const safetyVent: VentData = {
+    id: generateId(),
+    position: spawn.clone(),
+    radius: 3,
+  };
+  return [...vents, safetyVent];
 }
 
 function GameScene() {
@@ -68,6 +81,7 @@ function GameScene() {
     addGlowStick,
     removeGlowStick,
     toggleGodMode,
+    setSpawnPosition,
   } = usePlayerState(spawnPos);
 
   const { keys, onKeyDown } = useKeyboardControls();
@@ -156,22 +170,42 @@ function GameScene() {
 
     const geometry = await generateCave(CAVE_CONFIG);
     dispatch({ type: 'SET_CAVE_GEOMETRY', payload: geometry });
+    dispatch({ type: 'SET_GENERATION_PROGRESS', payload: 100 });
 
+    await new Promise((resolve) => setTimeout(resolve, 0));
     const spawn = findSpawnPosition(CAVE_CONFIG);
+    dispatch({ type: 'SET_GENERATION_PROGRESS', payload: 100 });
     setSpawnPos(spawn);
+    setSpawnPosition(spawn);
+    setPosition(spawn);
     dispatch({ type: 'UPDATE_HUD', payload: { spawnPosition: spawn } });
 
-    const decos = generateDecorations(CAVE_CONFIG, 250);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const decos = generateDecorations(CAVE_CONFIG, 200);
     setDecorations(decos);
+    dispatch({ type: 'SET_GENERATION_PROGRESS', payload: 100 });
 
-    const ventList = generateVents(CAVE_CONFIG, 6);
-    setVents(ventList);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const ventList = generateVents(CAVE_CONFIG, 5);
+    const safeVents = ensureVentNearSpawn(ventList, spawn);
+    setVents(safeVents);
+    dispatch({ type: 'SET_GENERATION_PROGRESS', payload: 100 });
 
+    await new Promise((resolve) => setTimeout(resolve, 0));
     const gsList = generateGlowSticks(CAVE_CONFIG, 10);
     setGlowSticks(gsList);
 
     dispatch({ type: 'SET_GENERATING', payload: false });
-  }, [dispatch, generateCave, findSpawnPosition, generateDecorations, generateVents, generateGlowSticks]);
+  }, [
+    dispatch,
+    generateCave,
+    findSpawnPosition,
+    generateDecorations,
+    generateVents,
+    generateGlowSticks,
+    setSpawnPosition,
+    setPosition,
+  ]);
 
   useEffect(() => {
     generateWorld();
@@ -289,6 +323,10 @@ function GameScene() {
     [setRotation]
   );
 
+  const playerKeys = isOxygenDepleted
+    ? { forward: false, backward: false, left: false, right: false, jump: false, sprint: false }
+    : keys;
+
   return (
     <>
       <Cave geometry={state.caveGeometry} />
@@ -300,19 +338,17 @@ function GameScene() {
         nearestStickId={nearestStickId}
       />
 
-      {!playerState.isGodMode ? (
-        <Player
-          keys={isOxygenDepleted ? { forward: false, backward: false, left: false, right: false, jump: false, sprint: false } : keys}
-          checkCollision={checkCollision}
-          onPositionChange={onPlayerPositionChange}
-          onRotationChange={onPlayerRotationChange}
-          isGodMode={playerState.isGodMode}
-          isPointerLocked={state.isPointerLocked}
-          spawnPosition={spawnPos}
-        />
-      ) : (
-        <GodViewCamera isActive={playerState.isGodMode} />
-      )}
+      <Player
+        keys={playerKeys}
+        checkCollision={checkCollision}
+        onPositionChange={onPlayerPositionChange}
+        onRotationChange={onPlayerRotationChange}
+        isGodMode={playerState.isGodMode}
+        isPointerLocked={state.isPointerLocked}
+        spawnPosition={spawnPos}
+      />
+
+      <GodViewCamera isActive={playerState.isGodMode} />
     </>
   );
 }

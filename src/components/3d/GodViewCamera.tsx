@@ -10,6 +10,7 @@ interface GodViewCameraProps {
 
 export function GodViewCamera({ isActive }: GodViewCameraProps) {
   const { camera, set } = useThree();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const controlsRef = useRef<any>(null);
   const initialCamPos = useRef(new THREE.Vector3(0, CAVE_CONFIG.size.y * 0.8, CAVE_CONFIG.size.z * 0.6));
 

@@ -56,6 +56,7 @@ export function Player({
   }, [handleMouseMove]);
 
   useFrame((state, delta) => {
+    if (isGodMode) return;
     const dt = Math.min(delta, 0.1);
 
     const direction = new THREE.Vector3();
@@ -161,13 +162,22 @@ export function Player({
 
   const lightTarget = useRef<THREE.Object3D>(null);
 
+  useEffect(() => {
+    if (!isGodMode) {
+      camera.position.copy(positionRef.current);
+    }
+  }, [isGodMode, camera]);
+
   useFrame(() => {
+    if (isGodMode) return;
     if (lightTarget.current) {
       const dir = new THREE.Vector3();
       camera.getWorldDirection(dir);
       lightTarget.current.position.copy(camera.position).add(dir.multiplyScalar(5));
     }
   });
+
+  if (isGodMode) return null;
 
   return (
     <>

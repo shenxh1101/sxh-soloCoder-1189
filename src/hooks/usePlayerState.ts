@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { PlayerState } from '../types';
 import { OXYGEN_CONFIG } from '../utils/constants';
@@ -17,6 +17,21 @@ export function usePlayerState(initialPosition: THREE.Vector3) {
 
   const playerStateRef = useRef(playerState);
   playerStateRef.current = playerState;
+
+  useEffect(() => {
+    setPlayerState((prev) => {
+      if (prev.spawnPosition.distanceTo(initialPosition) < 0.01) return prev;
+      return {
+        ...prev,
+        spawnPosition: initialPosition.clone(),
+        position: prev.position.clone(),
+      };
+    });
+  }, [initialPosition]);
+
+  const setSpawnPosition = useCallback((pos: THREE.Vector3) => {
+    setPlayerState((prev) => ({ ...prev, spawnPosition: pos.clone() }));
+  }, []);
 
   const setPosition = useCallback((pos: THREE.Vector3) => {
     setPlayerState((prev) => ({ ...prev, position: pos.clone() }));
@@ -75,5 +90,6 @@ export function usePlayerState(initialPosition: THREE.Vector3) {
     removeGlowStick,
     toggleGodMode,
     reset,
+    setSpawnPosition,
   };
 }
