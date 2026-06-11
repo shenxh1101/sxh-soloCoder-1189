@@ -13,7 +13,6 @@ interface PlayerProps {
   isGodMode: boolean;
   isPointerLocked: boolean;
   spawnPosition: THREE.Vector3;
-  onPlaceGlowStick: (position: THREE.Vector3, direction: THREE.Vector3) => void;
 }
 
 export function Player({
@@ -24,9 +23,8 @@ export function Player({
   isGodMode,
   isPointerLocked,
   spawnPosition,
-  onPlaceGlowStick,
 }: PlayerProps) {
-  const { camera, gl } = useThree();
+  const { camera } = useThree();
   const velocityRef = useRef(new THREE.Vector3(0, 0, 0));
   const yawRef = useRef(0);
   const pitchRef = useRef(0);

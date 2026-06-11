@@ -6,12 +6,13 @@ import { GAME_COLORS, LIGHT_CONFIG } from '../../utils/constants';
 
 interface GlowStickProps {
   glowSticks: GlowStickData[];
-  onPickUp: (id: string) => void;
-  playerPosition: THREE.Vector3;
   isGodMode: boolean;
+  nearestStickId?: string | null;
 }
 
-export function GlowSticks({ glowSticks, onPickUp, playerPosition, isGodMode }: GlowStickProps) {
+const PICKUP_HIGHLIGHT_COLOR = '#ffffff';
+
+export function GlowSticks({ glowSticks, isGodMode, nearestStickId }: GlowStickProps) {
   const groupRef = useRef<THREE.Group>(null);
   const lightRefs = useRef<Map<string, THREE.PointLight>>(new Map());
   const meshRefs = useRef<Map<string, THREE.Mesh>>(new Map());
@@ -26,24 +27,29 @@ export function GlowSticks({ glowSticks, onPickUp, playerPosition, isGodMode }: 
       if (mesh) {
         mesh.rotation.y = time * 2;
         mesh.position.y = gs.position.y + Math.sin(time * 3 + gs.position.x) * 0.1;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (nearestStickId === gs.id) {
+          mat.emissiveIntensity = gs.intensity * 1.2 + Math.sin(time * 8) * 0.3;
+          mat.emissive.set(PICKUP_HIGHLIGHT_COLOR);
+        } else {
+          mat.emissiveIntensity = gs.intensity * 0.5;
+          mat.emissive.set(GAME_COLORS.glowStick);
+        }
       }
 
       const light = lightRefs.current.get(gs.id);
       if (light) {
         light.intensity = gs.intensity + Math.sin(time * 4 + gs.position.z) * 0.2;
       }
-
-      const dist = playerPosition.distanceTo(gs.position);
-      if (dist < 1.5) {
-        onPickUp(gs.id);
-      }
     });
   });
 
   useEffect(() => {
+    const lights = lightRefs;
+    const meshes = meshRefs;
     return () => {
-      lightRefs.current.clear();
-      meshRefs.current.clear();
+      lights.current.clear();
+      meshes.current.clear();
     };
   }, []);
 

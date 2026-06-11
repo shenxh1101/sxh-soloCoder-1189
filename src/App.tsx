@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GameProvider, useGame } from './context/GameContext';
 import { useCaveGenerator } from './hooks/useCaveGenerator';
@@ -8,7 +8,7 @@ import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { useOxygenSystem } from './hooks/useOxygenSystem';
 import { useMapSystem } from './hooks/useMapSystem';
 import { useObjExport } from './hooks/useObjExport';
-import { CAVE_CONFIG } from './utils/constants';
+import { CAVE_CONFIG, OXYGEN_CONFIG } from './utils/constants';
 import { generateId } from './utils/helpers';
 import { Cave } from './components/3d/Cave';
 import { Player } from './components/3d/Player';
@@ -18,6 +18,25 @@ import { Vents } from './components/3d/Vent';
 import { GodViewCamera } from './components/3d/GodViewCamera';
 import { HUD } from './components/ui/HUD';
 import { DecorationData, GlowStickData, VentData } from './types';
+
+const PICKUP_DISTANCE = 2.0;
+
+function findNearestGlowStick(
+  glowSticks: GlowStickData[],
+  playerPos: THREE.Vector3
+): { id: string | null; distance: number } {
+  let nearest: string | null = null;
+  let minDist = Infinity;
+  for (const gs of glowSticks) {
+    if (gs.isPickedUp) continue;
+    const d = playerPos.distanceTo(gs.position);
+    if (d < minDist && d <= PICKUP_DISTANCE) {
+      minDist = d;
+      nearest = gs.id;
+    }
+  }
+  return { id: nearest, distance: minDist };
+}
 
 function GameScene() {
   const { state, dispatch } = useGame();
@@ -37,6 +56,8 @@ function GameScene() {
   const [decorations, setDecorations] = useState<DecorationData[]>([]);
   const [vents, setVents] = useState<VentData[]>([]);
   const [glowSticks, setGlowSticks] = useState<GlowStickData[]>([]);
+  const [nearestStickId, setNearestStickId] = useState<string | null>(null);
+  const [isOxygenDepleted, setIsOxygenDepleted] = useState(false);
 
   const {
     playerState,
@@ -52,11 +73,29 @@ function GameScene() {
   const { keys, onKeyDown } = useKeyboardControls();
   const { exportCave } = useObjExport();
 
+  const handleOxygenDepleted = useCallback(() => {
+    if (!isOxygenDepleted) {
+      setIsOxygenDepleted(true);
+      setPosition(spawnPos);
+      if (document.pointerLockElement) {
+        document.exitPointerLock();
+      }
+    }
+  }, [isOxygenDepleted, setPosition, spawnPos]);
+
   const { isLow, isNearVent } = useOxygenSystem({
     vents,
     playerPosition: playerState.position,
     isGodMode: playerState.isGodMode,
-    onOxygenChange: setOxygen,
+    onOxygenChange: (oxygen: number) => {
+      setOxygen(oxygen);
+      if (oxygen <= 0 && !playerState.isGodMode) {
+        handleOxygenDepleted();
+      }
+      if (isOxygenDepleted && oxygen > OXYGEN_CONFIG.warningThreshold) {
+        setIsOxygenDepleted(false);
+      }
+    },
   });
 
   const { mapData, getExploredPercentage, gridWidth, gridHeight } = useMapSystem({
@@ -68,12 +107,17 @@ function GameScene() {
 
   const { gl } = useThree();
 
+  useFrame(() => {
+    const { id } = findNearestGlowStick(glowSticks, playerState.position);
+    setNearestStickId((prev) => (prev !== id ? id : prev));
+  });
+
   useEffect(() => {
     dispatch({
       type: 'UPDATE_HUD',
       payload: {
         oxygen: playerState.oxygen,
-        isOxygenLow: isLow(),
+        isOxygenLow: isLow() || isOxygenDepleted,
         isNearVent: isNearVent(),
         playerPosition: playerState.position,
         playerYaw: playerState.yaw,
@@ -84,6 +128,8 @@ function GameScene() {
         gridWidth,
         gridHeight,
         exploredPercentage: getExploredPercentage(),
+        nearestGlowStickAvailable: nearestStickId !== null,
+        isOxygenDepleted,
       },
     });
   }, [
@@ -100,6 +146,8 @@ function GameScene() {
     gridWidth,
     gridHeight,
     getExploredPercentage,
+    nearestStickId,
+    isOxygenDepleted,
   ]);
 
   const generateWorld = useCallback(async () => {
@@ -158,41 +206,42 @@ function GameScene() {
     };
   }, [gl, dispatch, isGenerating, playerState.isGodMode]);
 
-  const handlePickUpGlowStick = useCallback((id: string) => {
+  const handlePickUpGlowStick = useCallback(() => {
+    if (!nearestStickId) return false;
     setGlowSticks((prev) =>
-      prev.map((gs) => (gs.id === id ? { ...gs, isPickedUp: true } : gs))
+      prev.map((gs) => (gs.id === nearestStickId ? { ...gs, isPickedUp: true } : gs))
     );
     addGlowStick();
-  }, [addGlowStick]);
+    return true;
+  }, [nearestStickId, addGlowStick]);
 
-  const handlePlaceGlowStick = useCallback(
-    (position: THREE.Vector3, direction: THREE.Vector3) => {
-      if (!removeGlowStick()) return;
+  const handlePlaceGlowStick = useCallback(() => {
+    if (!removeGlowStick()) return;
 
-      const placePos = position.clone().add(direction.multiplyScalar(2));
-      placePos.y -= 0.5;
+    const { position, yaw } = playerStateRef.current;
+    const direction = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw)).normalize();
+    const placePos = position.clone().add(direction.multiplyScalar(1.5));
+    placePos.y -= 0.8;
 
-      const newGs: GlowStickData = {
-        id: generateId(),
-        position: placePos,
-        isPickedUp: false,
-        intensity: 1.5 + Math.random(),
-      };
+    const newGs: GlowStickData = {
+      id: generateId(),
+      position: placePos,
+      isPickedUp: false,
+      intensity: 1.5 + Math.random(),
+    };
 
-      setGlowSticks((prev) => [...prev, newGs]);
-    },
-    [removeGlowStick]
-  );
+    setGlowSticks((prev) => [...prev, newGs]);
+  }, [removeGlowStick, playerStateRef]);
 
-  const placeStickAction = useCallback(() => {
-    const { position, yaw, pitch } = playerStateRef.current;
-    const direction = new THREE.Vector3(
-      -Math.sin(yaw) * Math.cos(pitch),
-      Math.sin(pitch),
-      -Math.cos(yaw) * Math.cos(pitch)
-    ).normalize();
-    handlePlaceGlowStick(position, direction);
-  }, [handlePlaceGlowStick, playerStateRef]);
+  const pickUpAction = useCallback(() => {
+    if (isOxygenDepleted || playerState.isGodMode) return;
+    handlePickUpGlowStick();
+  }, [handlePickUpGlowStick, isOxygenDepleted, playerState.isGodMode]);
+
+  const placeAction = useCallback(() => {
+    if (isOxygenDepleted || playerState.isGodMode) return;
+    handlePlaceGlowStick();
+  }, [handlePlaceGlowStick, isOxygenDepleted, playerState.isGodMode]);
 
   const exportAction = useCallback(() => {
     const success = exportCave(state.caveGeometry);
@@ -205,30 +254,32 @@ function GameScene() {
     if (document.pointerLockElement) {
       document.exitPointerLock();
     }
+    setIsOxygenDepleted(false);
     generateWorld();
   }, [generateWorld]);
 
+  const toggleGodModeAction = useCallback(() => {
+    toggleGodMode();
+    if (document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+    dispatch({ type: 'SET_POINTER_LOCKED', payload: false });
+  }, [toggleGodMode, dispatch]);
+
   useEffect(() => {
-    onKeyDown('pickUp', () => {
-      console.log('Pickup pressed');
-    });
-    onKeyDown('place', placeStickAction);
-    onKeyDown('toggleGodMode', () => {
-      toggleGodMode();
-      if (document.pointerLockElement) {
-        document.exitPointerLock();
-      }
-      dispatch({ type: 'SET_POINTER_LOCKED', payload: false });
-    });
+    onKeyDown('pickUp', pickUpAction);
+    onKeyDown('place', placeAction);
+    onKeyDown('toggleGodMode', toggleGodModeAction);
     onKeyDown('exportObj', exportAction);
     onKeyDown('regenerate', regenerateAction);
-  }, [onKeyDown, placeStickAction, toggleGodMode, exportAction, regenerateAction, dispatch]);
+  }, [onKeyDown, pickUpAction, placeAction, toggleGodModeAction, exportAction, regenerateAction]);
 
   const onPlayerPositionChange = useCallback(
     (pos: THREE.Vector3) => {
+      if (isOxygenDepleted) return;
       setPosition(pos);
     },
-    [setPosition]
+    [setPosition, isOxygenDepleted]
   );
 
   const onPlayerRotationChange = useCallback(
@@ -245,21 +296,19 @@ function GameScene() {
       <Vents vents={vents} isGodMode={playerState.isGodMode} />
       <GlowSticks
         glowSticks={glowSticks}
-        onPickUp={handlePickUpGlowStick}
-        playerPosition={playerState.position}
         isGodMode={playerState.isGodMode}
+        nearestStickId={nearestStickId}
       />
 
       {!playerState.isGodMode ? (
         <Player
-          keys={keys}
+          keys={isOxygenDepleted ? { forward: false, backward: false, left: false, right: false, jump: false, sprint: false } : keys}
           checkCollision={checkCollision}
           onPositionChange={onPlayerPositionChange}
           onRotationChange={onPlayerRotationChange}
           isGodMode={playerState.isGodMode}
           isPointerLocked={state.isPointerLocked}
           spawnPosition={spawnPos}
-          onPlaceGlowStick={handlePlaceGlowStick}
         />
       ) : (
         <GodViewCamera isActive={playerState.isGodMode} />
@@ -297,6 +346,8 @@ function AppContent() {
         gridWidth={state.hud.gridWidth}
         gridHeight={state.hud.gridHeight}
         exploredPercentage={state.hud.exploredPercentage}
+        nearestGlowStickAvailable={state.hud.nearestGlowStickAvailable}
+        isOxygenDepleted={state.hud.isOxygenDepleted}
       />
     </div>
   );

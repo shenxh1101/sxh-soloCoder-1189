@@ -300,8 +300,7 @@ interface Cube {
 function processCube(
   cube: Cube,
   threshold: number,
-  mc: MarchingCube,
-  cornerIndex: number
+  mc: MarchingCube
 ): void {
   let cubeIndex = 0;
   for (let i = 0; i < 8; i++) {
@@ -339,13 +338,20 @@ function processCube(
     edgeVerts[11] = vertexInterp(cube.positions[3], cube.positions[7], cube.values[3], cube.values[7], threshold);
 
   let triIndex = 0;
-  let startIdx = cubeIndex * 16;
-  while (TRI_TABLE[startIdx + triIndex] !== -1) {
+  const startIdx = cubeIndex * 16;
+  const maxIters = 16;
+  let iterCount = 0;
+  while (TRI_TABLE[startIdx + triIndex] !== -1 && iterCount < maxIters) {
+    iterCount++;
     const idx0 = TRI_TABLE[startIdx + triIndex];
     const idx1 = TRI_TABLE[startIdx + triIndex + 1];
     const idx2 = TRI_TABLE[startIdx + triIndex + 2];
 
-    if (idx0 < 0 || idx0 >= 12 || idx1 < 0 || idx1 >= 12 || idx2 < 0 || idx2 >= 12) {
+    if (
+      idx0 === undefined || idx1 === undefined || idx2 === undefined ||
+      typeof idx0 !== 'number' || typeof idx1 !== 'number' || typeof idx2 !== 'number' ||
+      idx0 < 0 || idx0 >= 12 || idx1 < 0 || idx1 >= 12 || idx2 < 0 || idx2 >= 12
+    ) {
       break;
     }
 
@@ -381,7 +387,7 @@ function processCube(
 }
 
 export function useCaveGenerator() {
-  const { fbm3D, noise3D } = usePerlinNoise();
+  const { fbm3D } = usePerlinNoise();
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const volumeDataRef = useRef<Float32Array | null>(null);
@@ -434,9 +440,6 @@ export function useCaveGenerator() {
         [0, 1, 0], [1, 1, 0], [1, 1, 1], [0, 1, 1],
       ];
 
-      let processed = 0;
-      const totalCubes = (size.x - 1) * (size.y - 1) * (size.z - 1);
-
       for (let y = 0; y < size.y - 1; y++) {
         for (let x = 0; x < size.x - 1; x++) {
           for (let z = 0; z < size.z - 1; z++) {
@@ -451,8 +454,7 @@ export function useCaveGenerator() {
               values.push(volume[py * size.x * size.z + px * size.z + pz]);
             }
 
-            processCube({ positions, values }, threshold, mc, 0);
-            processed++;
+            processCube({ positions, values }, threshold, mc);
           }
         }
         setProgress(50 + ((y + 1) / (size.y - 1)) * 50);

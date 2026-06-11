@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { CAVE_CONFIG, LIGHT_CONFIG, GAME_COLORS } from '../../utils/constants';
+import { CAVE_CONFIG, GAME_COLORS } from '../../utils/constants';
 
 interface GodViewCameraProps {
   isActive: boolean;

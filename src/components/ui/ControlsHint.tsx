@@ -32,7 +32,7 @@ export function ControlsHint({ isPointerLocked }: ControlsHintProps) {
             <span>Place</span>
           </div>
           <div className="flex items-center gap-1">
-            <kbd className="px-2 py-0.5 bg-gray-800 rounded text-gray-300 border border-gray-600">V</kbd>
+            <kbd className="px-2 py-0.5 bg-gray-800 rounded text-gray-300 border border-gray-600">G</kbd>
             <span>God View</span>
           </div>
           <div className="flex items-center gap-1">

@@ -18,6 +18,8 @@ const initialHudState: HUDState = {
   gridWidth: 0,
   gridHeight: 0,
   exploredPercentage: 0,
+  nearestGlowStickAvailable: false,
+  isOxygenDepleted: false,
 };
 
 const initialState: GameState = {

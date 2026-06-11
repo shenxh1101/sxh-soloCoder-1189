@@ -1,8 +1,8 @@
 import { CaveConfig } from '../types';
 
 export const CAVE_CONFIG: CaveConfig = {
-  size: { x: 64, y: 32, z: 64 },
-  noiseScale: 0.07,
+  size: { x: 48, y: 24, z: 48 },
+  noiseScale: 0.08,
   threshold: 0.35,
   octaves: 4,
   persistence: 0.5,
@@ -64,7 +64,7 @@ export const CONTROLS = {
   sprint: 'ShiftLeft',
   pickUp: 'KeyE',
   place: 'KeyQ',
-  toggleGodMode: 'KeyV',
+  toggleGodMode: 'KeyG',
   exportObj: 'KeyO',
   regenerate: 'KeyR',
 };

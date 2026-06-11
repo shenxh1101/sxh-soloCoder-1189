@@ -5,26 +5,48 @@ interface OxygenBarProps {
   oxygen: number;
   isLow: boolean;
   isNearVent: boolean;
+  isDepleted?: boolean;
 }
 
-export function OxygenBar({ oxygen, isLow, isNearVent }: OxygenBarProps) {
+export function OxygenBar({ oxygen, isLow, isNearVent, isDepleted }: OxygenBarProps) {
   const percentage = (oxygen / OXYGEN_CONFIG.maxOxygen) * 100;
 
   const barColor = useMemo(() => {
+    if (isDepleted) return '#ff0000';
     if (isNearVent) return GAME_COLORS.vent;
     if (percentage > 50) return GAME_COLORS.oxygenGood;
     if (percentage > OXYGEN_CONFIG.warningThreshold) return GAME_COLORS.oxygenWarning;
     return GAME_COLORS.oxygenDanger;
-  }, [percentage, isNearVent]);
+  }, [percentage, isNearVent, isDepleted]);
+
+  const labelText = isDepleted
+    ? 'DEPLETED - FIND VENT!'
+    : isNearVent
+    ? 'OXYGEN [REFILLING]'
+    : 'OXYGEN';
 
   return (
     <div className="absolute top-4 left-4 w-64">
-      <div className="text-xs font-mono text-gray-400 mb-1 tracking-wider">
-        OXYGEN {isNearVent && <span className="text-blue-400"> [REFILLING]</span>}
+      <div
+        className={`text-xs font-mono mb-1 tracking-wider ${
+          isDepleted
+            ? 'text-red-400 font-bold animate-pulse'
+            : isNearVent
+            ? 'text-blue-400'
+            : 'text-gray-400'
+        }`}
+      >
+        {labelText}
       </div>
-      <div className="relative h-6 bg-gray-900/80 rounded overflow-hidden border border-gray-700">
+      <div
+        className={`relative h-6 bg-gray-900/80 rounded overflow-hidden border ${
+          isDepleted ? 'border-red-500 animate-pulse' : 'border-gray-700'
+        }`}
+      >
         <div
-          className={`h-full transition-all duration-200 ${isLow && !isNearVent ? 'animate-pulse' : ''}`}
+          className={`h-full transition-all duration-200 ${
+            (isLow && !isNearVent) || isDepleted ? 'animate-pulse' : ''
+          }`}
           style={{
             width: `${percentage}%`,
             backgroundColor: barColor,

@@ -64,6 +64,8 @@ export interface HUDState {
   gridWidth: number;
   gridHeight: number;
   exploredPercentage: number;
+  nearestGlowStickAvailable: boolean;
+  isOxygenDepleted: boolean;
 }
 
 export interface GameState {

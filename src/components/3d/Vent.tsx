@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { VentData } from '../../types';
-import { GAME_COLORS, LIGHT_CONFIG } from '../../utils/constants';
+import { GAME_COLORS } from '../../utils/constants';
 
 interface VentProps {
   vents: VentData[];
