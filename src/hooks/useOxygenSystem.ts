@@ -31,8 +31,6 @@ export function useOxygenSystem({
 
   useEffect(() => {
     if (isGodMode) {
-      oxygenRef.current = OXYGEN_CONFIG.maxOxygen;
-      onOxygenChange(OXYGEN_CONFIG.maxOxygen);
       return;
     }
 

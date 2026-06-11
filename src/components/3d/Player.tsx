@@ -13,6 +13,7 @@ interface PlayerProps {
   isGodMode: boolean;
   isPointerLocked: boolean;
   spawnPosition: THREE.Vector3;
+  teleportPosition?: THREE.Vector3;
 }
 
 export function Player({
@@ -23,6 +24,7 @@ export function Player({
   isGodMode,
   isPointerLocked,
   spawnPosition,
+  teleportPosition,
 }: PlayerProps) {
   const { camera } = useThree();
   const velocityRef = useRef(new THREE.Vector3(0, 0, 0));
@@ -36,6 +38,22 @@ export function Player({
     camera.position.y += PLAYER_CONFIG.playerHeight * 0.5;
     positionRef.current.copy(camera.position);
   }, [camera, spawnPosition]);
+
+  useEffect(() => {
+    if (!teleportPosition) return;
+    positionRef.current.copy(teleportPosition);
+    camera.position.copy(teleportPosition);
+    velocityRef.current.set(0, 0, 0);
+    yawRef.current = 0;
+    pitchRef.current = 0;
+    const lookTarget = new THREE.Vector3();
+    lookTarget.x = camera.position.x;
+    lookTarget.y = camera.position.y;
+    lookTarget.z = camera.position.z - 1;
+    camera.lookAt(lookTarget);
+    onPositionChange(teleportPosition);
+    onRotationChange(0, 0);
+  }, [teleportPosition, camera, onPositionChange, onRotationChange]);
 
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
@@ -165,6 +183,12 @@ export function Player({
   useEffect(() => {
     if (!isGodMode) {
       camera.position.copy(positionRef.current);
+      const lookTarget = new THREE.Vector3();
+      lookTarget.x = camera.position.x + Math.sin(yawRef.current) * Math.cos(pitchRef.current);
+      lookTarget.y = camera.position.y + Math.sin(pitchRef.current);
+      lookTarget.z = camera.position.z + Math.cos(yawRef.current) * Math.cos(pitchRef.current);
+      camera.lookAt(lookTarget);
+      velocityRef.current.set(0, 0, 0);
     }
   }, [isGodMode, camera]);
 

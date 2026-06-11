@@ -71,6 +71,7 @@ function GameScene() {
   const [glowSticks, setGlowSticks] = useState<GlowStickData[]>([]);
   const [nearestStickId, setNearestStickId] = useState<string | null>(null);
   const [isOxygenDepleted, setIsOxygenDepleted] = useState(false);
+  const [teleportTarget, setTeleportTarget] = useState<THREE.Vector3 | undefined>(undefined);
 
   const {
     playerState,
@@ -90,7 +91,9 @@ function GameScene() {
   const handleOxygenDepleted = useCallback(() => {
     if (!isOxygenDepleted) {
       setIsOxygenDepleted(true);
-      setPosition(spawnPos);
+      const target = spawnPos.clone();
+      setPosition(target);
+      setTeleportTarget(target);
       if (document.pointerLockElement) {
         document.exitPointerLock();
       }
@@ -178,6 +181,7 @@ function GameScene() {
     setSpawnPos(spawn);
     setSpawnPosition(spawn);
     setPosition(spawn);
+    setTeleportTarget(spawn.clone());
     dispatch({ type: 'UPDATE_HUD', payload: { spawnPosition: spawn } });
 
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -310,10 +314,9 @@ function GameScene() {
 
   const onPlayerPositionChange = useCallback(
     (pos: THREE.Vector3) => {
-      if (isOxygenDepleted) return;
       setPosition(pos);
     },
-    [setPosition, isOxygenDepleted]
+    [setPosition]
   );
 
   const onPlayerRotationChange = useCallback(
@@ -346,6 +349,7 @@ function GameScene() {
         isGodMode={playerState.isGodMode}
         isPointerLocked={state.isPointerLocked}
         spawnPosition={spawnPos}
+        teleportPosition={teleportTarget}
       />
 
       <GodViewCamera isActive={playerState.isGodMode} />
